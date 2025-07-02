@@ -1,36 +1,60 @@
-# app.py – Main Streamlit Interface
+# app.py
 
 import streamlit as st
 from core.scraper import GoogleMapsScraper, YelpScraper
 from core.deduplicator import Deduplicator
 from core.enricher import LeadEnricher
 from core.scorer import LeadScorer
-from ui.dashboard import Dashboard
-from utils.file_handler import FileHandler
+import pandas as pd
+import time
 
-st.set_page_config(page_title="LeadIntelX - Smart Lead Intelligence", layout="wide")
-st.title("📊 LeadIntelX – AI-Powered Local Lead Intelligence")
+st.set_page_config(page_title="LeadGen Pro", layout="wide")
+st.title("🚀 SaaSquatch+ Lead Generator (Enhanced)")
 
-# Upload business keyword and location input
-st.sidebar.header("Search Settings")
-business_type = st.sidebar.text_input("Business Type (e.g., dentist, plumber)", "dentist")
-city = st.sidebar.text_input("City or Area", "San Francisco")
-source = st.sidebar.selectbox("Data Source", ["Google Maps", "Yelp"])
+# Sidebar Input
+with st.sidebar:
+    st.header("🔍 Lead Search Config")
+    query = st.text_input("Business Type", value="Marketing Agency")
+    location = st.text_input("Location", value="New York, NY")
+    sources = st.multiselect("Data Sources", ["Google Maps", "Yelp"], default=["Google Maps"])
+    scrape_btn = st.button("🔎 Find Leads")
 
-if st.sidebar.button("🔍 Find Leads"):
-    with st.spinner("Scraping leads from the web..."):
-        if source == "Google Maps":
-            scraper = GoogleMapsScraper(query=business_type, location=city)
-        else:
-            scraper = YelpScraper(query=business_type, location=city)
+# Result placeholders
+if scrape_btn:
+    with st.spinner("Scraping leads, deduplicating, and enriching them..."):
+        all_leads = []
 
-        raw_leads = scraper.scrape()
-        deduplicated = Deduplicator().deduplicate(raw_leads)
-        enriched = LeadEnricher().enrich(deduplicated)
-        scored = LeadScorer().score(enriched)
+        if "Google Maps" in sources:
+            g_scraper = GoogleMapsScraper(query, location)
+            all_leads += g_scraper.scrape()
+            time.sleep(1)
 
-        st.success(f"✅ {len(scored)} leads extracted, enriched, and scored.")
-        Dashboard().render(scored)
+        if "Yelp" in sources:
+            y_scraper = YelpScraper(query, location)
+            all_leads += y_scraper.scrape()
+            time.sleep(1)
 
-        # Export options
-        st.download_button("📥 Download CSV", FileHandler.to_csv(scored), "leads.csv")
+        # Deduplicate
+        deduper = Deduplicator()
+        leads_deduped = deduper.deduplicate(all_leads)
+
+        # Enrich
+        enricher = LeadEnricher()
+        leads_enriched = enricher.enrich(leads_deduped)
+
+        # Score
+        scorer = LeadScorer()
+        final_leads = scorer.score(leads_enriched)
+
+        df = pd.DataFrame(final_leads)
+
+        st.success(f"✅ {len(df)} leads processed successfully.")
+        st.dataframe(df[["name", "phone", "email", "rating", "score", "category", "source"]])
+
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button("⬇️ Download CSV", csv, "leads.csv", "text/csv")
+
+        with st.expander("📊 Full Data Table"):
+            st.dataframe(df)
+else:
+    st.info("👈 Enter your lead query and click 'Find Leads' to begin.")
